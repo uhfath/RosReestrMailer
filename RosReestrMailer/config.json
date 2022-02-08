@@ -12,5 +12,12 @@
                 "UseUtcTimestamp": false
             }
         }
-    }
+    },
+    "ImapHost": "imap.mail.ru",
+    "ImapPort": 993,
+    "UseSSL": true,
+    "UserName": "",
+    "Password": "",
+    "Folder": "",
+    "DownloadSource": "https://lk.rosreestr.ru/filestorage/download"
 }

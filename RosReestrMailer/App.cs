@@ -21,7 +21,7 @@ internal class App : IHostedService
 	public static IServiceCollection Configure(HostBuilderContext hostBuilderContext, IServiceCollection services)
 	{
 		services
-			.AddOptionsByClass<ConfigOptions>(hostBuilderContext.Configuration)
+			.Configure<ConfigOptions>(hostBuilderContext.Configuration)
 		;
 
 		return services;

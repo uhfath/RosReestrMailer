@@ -14,8 +14,8 @@ internal static class Program
 			{
 				cfg
 					.AddEnvironmentVariables("RRM_")
-					.AddCommandLine(args)
 					.AddJsonFile("config.json", true, false)
+					.AddCommandLine(args)
 				;
 			})
 			.ConfigureLogging(cfg =>
