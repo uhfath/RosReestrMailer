@@ -18,11 +18,12 @@ internal static class Program
 					.AddCommandLine(args)
 				;
 			})
-			.ConfigureLogging(cfg =>
+			.ConfigureLogging((ctx, cfg) =>
 			{
 				cfg
 					.ClearProviders()
-					.AddSimpleConsole()
+					.AddConsole()
+					.AddFile("RosReestrMailer.log", false)
 				;
 			})
 			.ConfigureServices((ctx, srv) =>
