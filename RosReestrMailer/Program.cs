@@ -1,24 +1,64 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using RosReestrMailer;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+
+namespace RosReestrMailer;
 
 internal static class Program
 {
-	private static Task<int> Main(string[] args)
+	private static IHostBuilder PrepareHost(string[] args)
 	{
-		var configuration = new ConfigurationBuilder()
-			.AddEnvironmentVariables("RRM_")
-			.AddJsonFile("config.json")
-			.AddCommandLine(args)
-			.Build();
+		var builder = Host.CreateDefaultBuilder()
+			.ConfigureAppConfiguration(cfg =>
+			{
+				cfg
+					.AddEnvironmentVariables("RRM_")
+					.AddCommandLine(args)
+					.AddJsonFile("config.json", true, false)
+				;
+			})
+			.ConfigureLogging(cfg =>
+			{
+				cfg
+					.ClearProviders()
+					.AddSimpleConsole()
+				;
+			})
+			.ConfigureServices((ctx, srv) =>
+			{
+				srv
+					.AddHostedService<App>()
+				;
 
-		using var services = new ServiceCollection()
-			.AddOptionsByClass<ConfigOptions>(configuration)
-			.AddTransient<App>()
-			.BuildServiceProvider(true);
+				App.Configure(ctx, srv);
+			})
+		;
 
+		builder.UseConsoleLifetime(cfg =>
+		{
+			cfg.SuppressStatusMessages = true;
+		});
+
+		return builder;
+	}
+
+	private static async Task<int> Main(string[] args)
+	{
 		using var cancellationTokenSource = new CancellationTokenSource();
-		var app = services.GetRequiredService<App>();
-		return app.Start(cancellationTokenSource.Token);
+
+		try
+		{
+			await PrepareHost(args)
+				.Build()
+				.RunAsync(cancellationTokenSource.Token);
+
+			return 0;
+		}
+		catch (Exception ex)
+		{
+			Console.Error.Write(ex.ToString());
+			return 1;
+		}
 	}
 }

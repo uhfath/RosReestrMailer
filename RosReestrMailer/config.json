@@ -1,3 +1,16 @@
 {
-
+    "Logging": {
+        "LogLevel": {
+            "Default": "Information"
+        },
+        "Console": {
+            "FormatterName": "simple",
+            "FormatterOptions": {
+                "SingleLine": true,
+                "IncludeScopes": false,
+                "TimestampFormat": "HH:mm:ss ",
+                "UseUtcTimestamp": false
+            }
+        }
+    }
 }
