@@ -27,4 +27,9 @@ internal class ConfigOptions
 	public string DestinationFolder { get; set; }
 	public bool GroupByDate { get; set; }
 	public bool ExploreDestinationOnFinish { get; set; }
+	public TimeSpan Timeout { get; set; } = TimeSpan.FromMinutes(1);
+	public int Retries { get; set; } = 5;
+
+	[Required(AllowEmptyStrings = false, ErrorMessage = "Не указан паттерн Regex для получения названия")]
+	public string TitleRegexPattern { get; set; }
 }

@@ -6,27 +6,39 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MimeKit;
 using Org.BouncyCastle.Asn1.X509;
+using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 
 namespace RosReestrMailer;
 
 internal class App : IHostedService
 {
-	private const string FileNameTemplate = "{0:yyyy.MM.dd}-{1:D4}.zip";
+	private const string FileNameTemplate = "{0}{1}.zip";
+	private const string IndexTemplate = " ({0})";
+	private static readonly Regex InvalidNameRegex = new($"[{Regex.Escape(new string(Path.GetInvalidFileNameChars()) + new string(Path.GetInvalidPathChars()))}]", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
 	private readonly ConfigOptions _configOptions;
 	private readonly IHostApplicationLifetime _hostApplicationLifetime;
 	private readonly ILogger<App> _logger;
+	private readonly Regex _titleRegex;
 
-	private static string GetUniqueFileName(string folder)
+	private static string StripInvalidPathChars(string path) =>
+		InvalidNameRegex.Replace(path, "_");
+
+	private static string GetUniqueFileName(string folder, string title)
 	{
 		string path;
-
 		var index = 0;
 		do
 		{
+			var indexText = index == 0
+				? string.Empty
+				: string.Format(IndexTemplate, index);
+
+			var name = StripInvalidPathChars(string.Format(FileNameTemplate, title, indexText));
+			path = Path.Combine(folder, name);
 			++index;
-			path = Path.Combine(folder, string.Format(FileNameTemplate, DateTime.Today, index));
 		} while (File.Exists(path));
 
 		return path;
@@ -34,7 +46,9 @@ internal class App : IHostedService
 
 	private async IAsyncEnumerable<string> GetUnreadMessagesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
 	{
+		_logger.LogInformation("Инициализация подключения");
 		using var client = new ImapClient();
+		client.Timeout = (int)_configOptions.Timeout.TotalMilliseconds;
 
 		_logger.LogInformation("Подключение к серверу: {server}:{port}", _configOptions.ImapHost, _configOptions.ImapPort);
 		await client.ConnectAsync(_configOptions.ImapHost, _configOptions.ImapPort, _configOptions.UseSSL, cancellationToken);
@@ -100,18 +114,29 @@ internal class App : IHostedService
 		await client.DisconnectAsync(true, cancellationToken);
 	}
 
-	private async Task<IEnumerable<Uri>> ExtractUrisAsync(string source, CancellationToken cancellationToken)
+	private async Task<IEnumerable<LinkInfo>> ExtractUrisAsync(string source, CancellationToken cancellationToken)
 	{
 		_logger.LogInformation("Извлечение ссылки из текста");
+		var title = _titleRegex.Match(source).Groups["title"].Value;
+		if (string.IsNullOrWhiteSpace(title))
+		{
+			_logger.LogWarning("Внимание! Номер запроса не найден в тексте. Используется текущая дата.");
+			title = DateTime.Today.ToString("yyyy.MM.dd");
+		}
+
 		var config = AngleSharp.Configuration.Default;
 		using var context = AngleSharp.BrowsingContext.New(config);
 
 		var parser = context.GetService<AngleSharp.Html.Parser.IHtmlParser>();
 		using var document = await parser.ParseDocumentAsync(source, cancellationToken);
 		var links = document.QuerySelectorAll("a")
-			.Select(a => new Uri(a.Attributes["href"].Value))
-			.Where(l => string.Equals(l.Host, _configOptions.DownloadSource.Host, StringComparison.OrdinalIgnoreCase))
-			.Where(l => string.Equals(l.AbsolutePath, _configOptions.DownloadSource.AbsolutePath, StringComparison.OrdinalIgnoreCase))
+			.Select(s => new LinkInfo
+			{
+				Title = title,
+				Uri = new Uri(s.Attributes["href"].Value),
+			})
+			.Where(l => string.Equals(l.Uri.Host, _configOptions.DownloadSource.Host, StringComparison.OrdinalIgnoreCase))
+			.Where(l => string.Equals(l.Uri.AbsolutePath, _configOptions.DownloadSource.AbsolutePath, StringComparison.OrdinalIgnoreCase))
 			.ToArray()
 		;
 
@@ -123,7 +148,7 @@ internal class App : IHostedService
 		return links;
 	}
 	
-	private async Task<string> DownloadUrisAsync(IEnumerable<Uri> uris, CancellationToken cancellationToken)
+	private async Task<string> DownloadUrisAsync(IEnumerable<LinkInfo> links, CancellationToken cancellationToken)
 	{
 		var folder = _configOptions.DestinationFolder ?? string.Empty;
 		if (_configOptions.GroupByDate)
@@ -132,14 +157,14 @@ internal class App : IHostedService
 		}
 
 		var directory = Directory.CreateDirectory(folder);
-		foreach (var uri in uris)
+		foreach (var link in links)
 		{
-			_logger.LogInformation("Скачивание файла по ссылке: {uri}", uri);
+			_logger.LogInformation("Скачивание файла: {title}", link.Title);
 
 			using var client = new HttpClient();
-			await using var stream = await client.GetStreamAsync(uri, cancellationToken);
+			await using var stream = await client.GetStreamAsync(link.Uri, cancellationToken);
 
-			var filePath = GetUniqueFileName(directory.FullName);
+			var filePath = GetUniqueFileName(directory.FullName, link.Title);
 			_logger.LogInformation("Сохранение на диске: {path}", filePath);
 
 			await using var destination = File.Create(filePath);
@@ -161,11 +186,12 @@ internal class App : IHostedService
 		catch (OptionsValidationException ex)
 		{
 			logger.LogError("Ошибка параметров: {failures}", ex.Failures);
-			hostApplicationLifetime.StopApplication();
 		}
 
 		this._hostApplicationLifetime = hostApplicationLifetime;
 		this._logger = logger;
+
+		_titleRegex = new Regex(_configOptions.TitleRegexPattern, RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 	}
 
 	public static IServiceCollection Configure(HostBuilderContext hostBuilderContext, IServiceCollection services)
@@ -181,28 +207,41 @@ internal class App : IHostedService
 
 	public async Task StartAsync(CancellationToken cancellationToken)
 	{
+		_logger.LogInformation("Текущая версия: {version}", Assembly.GetExecutingAssembly().GetName().Version);
+
 		if (_configOptions == null)
 		{
+			_hostApplicationLifetime.StopApplication();
 			return;
 		}
 
 		string lastFolder = null;
-
-		_logger.LogInformation("Инициализация клиента");
-		await foreach (var message in GetUnreadMessagesAsync(cancellationToken))
+		for (var retry = 0; retry < _configOptions.Retries; retry++)
 		{
-			var uris = await ExtractUrisAsync(message, cancellationToken);
-			lastFolder = await DownloadUrisAsync(uris, cancellationToken);
+			try
+			{
+				await foreach (var message in GetUnreadMessagesAsync(cancellationToken))
+				{
+					var links = await ExtractUrisAsync(message, cancellationToken);
+					lastFolder = await DownloadUrisAsync(links, cancellationToken);
+				}
+
+				break;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogError(ex, "Ошибка обработки, перезапуск № {retry}", retry + 1);
+			}
 		}
 
 		if (lastFolder != null && _configOptions.ExploreDestinationOnFinish)
 		{
-			using (System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo()
+			using var _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo()
 			{
 				FileName = lastFolder,
 				UseShellExecute = true,
 				Verb = "open"
-			}));
+			});
 		}
 
 		_hostApplicationLifetime.StopApplication();

@@ -19,8 +19,11 @@
     "UserName": "",
     "Password": "",
     "Folder": "",
-    "DownloadSource": "https://lk.rosreestr.ru/filestorage/download",
     "DestinationFolder": "",
+    "DownloadSource": "https://lk.rosreestr.ru/filestorage/download",
     "GroupByDate": true,
-    "ExploreDestinationOnFinish": true
+    "ExploreDestinationOnFinish": true,
+    "Timeout": "00:10:00",
+    "Retries": 10,
+    "TitleRegexPattern": "по запросу № <b>(?<title>.+)<\/b>"
 }
