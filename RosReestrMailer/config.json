@@ -25,5 +25,6 @@
     "ExploreDestinationOnFinish": true,
     "Timeout": "00:10:00",
     "Retries": 10,
-    "TitleRegexPattern": "по запросу № <b>(?<title>.+)<\/b>"
+    "TitleRegexPattern": "(по запросу №)\\s+<b>(?<title>.+)<\\/b>",
+    "AutoSetRead": true
 }

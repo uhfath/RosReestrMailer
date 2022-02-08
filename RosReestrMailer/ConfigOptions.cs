@@ -32,4 +32,5 @@ internal class ConfigOptions
 
 	[Required(AllowEmptyStrings = false, ErrorMessage = "Не указан паттерн Regex для получения названия")]
 	public string TitleRegexPattern { get; set; }
+	public bool AutoSetRead { get; set; } = true;
 }

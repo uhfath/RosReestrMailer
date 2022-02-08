@@ -105,8 +105,11 @@ internal class App : IHostedService
 				var source = (html as TextPart).Text;
 				yield return source;
 
-				_logger.LogInformation("Отметка письма прочитанным");
-				await folder.StoreAsync(item.UniqueId, new StoreFlagsRequest(StoreAction.Add, MessageFlags.Seen) { Silent = false }, cancellationToken);
+				if (_configOptions.AutoSetRead)
+				{
+					_logger.LogInformation("Отметка письма прочитанным");
+					await folder.StoreAsync(item.UniqueId, new StoreFlagsRequest(StoreAction.Add, MessageFlags.Seen) { Silent = false }, cancellationToken);
+				}
 			}
 		}
 
@@ -226,6 +229,10 @@ internal class App : IHostedService
 					lastFolder = await DownloadUrisAsync(links, cancellationToken);
 				}
 
+				break;
+			}
+			catch (TaskCanceledException)
+			{
 				break;
 			}
 			catch (Exception ex)
