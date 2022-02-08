@@ -19,5 +19,8 @@
     "UserName": "",
     "Password": "",
     "Folder": "",
-    "DownloadSource": "https://lk.rosreestr.ru/filestorage/download"
+    "DownloadSource": "https://lk.rosreestr.ru/filestorage/download",
+    "DestinationFolder": "",
+    "GroupByDate": true,
+    "ExploreDestinationOnFinish":  true
 }
