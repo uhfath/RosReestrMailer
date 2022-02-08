@@ -46,19 +46,22 @@ internal static class Program
 
 	private static async Task<int> Main(string[] args)
 	{
-		using var cancellationTokenSource = new CancellationTokenSource();
+		Environment.ExitCode = 0;
+
+		using var host = PrepareHost(args).Build();
+		var loggerFactory = host.Services.GetRequiredService<ILoggerFactory>();
+		var logger = loggerFactory.CreateLogger("root");
 
 		try
 		{
-			await PrepareHost(args)
-				.Build()
-				.RunAsync(cancellationTokenSource.Token);
-
+			using var cancellationTokenSource = new CancellationTokenSource();
+			await host.RunAsync(cancellationTokenSource.Token);
 			return 0;
 		}
 		catch (Exception ex)
 		{
-			Console.Error.Write(ex.ToString());
+			logger.LogError(ex, "Ошибка выполнения");
+			Environment.ExitCode = 1;
 			return 1;
 		}
 	}

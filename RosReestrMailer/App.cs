@@ -160,11 +160,7 @@ internal class App : IHostedService
 		}
 		catch (OptionsValidationException ex)
 		{
-			foreach (var failure in ex.Failures)
-			{
-				logger.LogError(failure);
-			}
-
+			logger.LogError("Ошибка параметров: {failures}", ex.Failures);
 			hostApplicationLifetime.StopApplication();
 		}
 
